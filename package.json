@@ -1,0 +1,9 @@
+{
+  "name": "headless-chromium",
+  "version": "1.0.0",
+  "description": "Small, always-current headless Chromium for server-side PDF rendering in Docker images",
+  "main": "index.js",
+  "license": "MIT",
+  "engines": { "node": ">=23.8" },
+  "files": ["index.js", "build.sh", "check-needed.js", "LICENSE", "README.md"]
+}

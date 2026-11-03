@@ -1,0 +1,51 @@
+name: Build and render check
+
+# Weekly against the newest Chrome Stable, so a Google change (a new shared
+# library, a launch-flag change) shows up here before it reaches an app image.
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: node:24-trixie-slim
+    steps:
+      - name: Build tools and the runtime packages the README documents
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates curl unzip gcc libc6-dev binutils \
+            libnss3 libglib2.0-0t64 libatk1.0-0t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libdbus-1-3 \
+            libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libxkbcommon0 \
+            libasound2t64 libexpat1 libudev1 fontconfig-config fonts-liberation fonts-lohit-deva \
+            poppler-utils
+      - uses: actions/checkout@v4
+      - name: Build
+        run: ./build.sh /opt/headless-chromium
+      - name: Render a PDF with Hindi text and the rupee sign
+        env:
+          FONTCONFIG_PATH: /etc/fonts
+        run: |
+          mkdir -p /tmp/render && cd /tmp/render
+          npm init -y >/dev/null && npm install --no-audit --no-fund puppeteer-core@25 >/dev/null
+          cat > render.js <<'JS'
+          const chromium = require("/opt/headless-chromium");
+          const puppeteer = require("puppeteer-core");
+          (async () => {
+            const browser = await puppeteer.launch({ executablePath: await chromium.executablePath(), env: chromium.env(), args: chromium.args, headless: "shell" });
+            const page = await browser.newPage();
+            await page.setContent('<h1 style="font-family:Arial">Payment Receipt</h1><p>रवि कुमार — ₹ 25,000.00</p><iframe src="file:///etc/hostname"></iframe>');
+            await page.pdf({ path: "out.pdf", format: "A4" });
+            console.log(await browser.version());
+            await browser.close();
+          })().catch((e) => { console.error(e); process.exit(1); });
+          JS
+          node render.js
+          pdftotext out.pdf - | tee text.txt
+          grep -q "Payment Receipt" text.txt
+          grep -q "₹" text.txt
+          if grep -q "$(cat /etc/hostname)" text.txt; then echo "local file leaked into the PDF"; exit 1; fi
+          pdffonts out.pdf
