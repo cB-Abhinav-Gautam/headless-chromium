@@ -35,10 +35,13 @@ FROM node:24-trixie-slim AS chromium
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl unzip git gcc libc6-dev binutils \
  && rm -rf /var/lib/apt/lists/*
-ARG HEADLESS_CHROMIUM_REF=v1.0.0
+# Pin this repository by commit SHA: a tag or branch can be moved, a SHA can't.
+ARG HEADLESS_CHROMIUM_REF=<commit sha>
 # Empty = latest Chrome Stable; set to pin, e.g. 156.0.8078.80
 ARG CHROME_VERSION=
-RUN git clone --depth 1 --branch "$HEADLESS_CHROMIUM_REF" https://github.com/cB-Abhinav-Gautam/headless-chromium.git /src \
+RUN git init -q /src \
+ && git -C /src fetch -q --depth 1 https://github.com/cB-Abhinav-Gautam/headless-chromium.git "$HEADLESS_CHROMIUM_REF" \
+ && git -C /src checkout -q FETCH_HEAD \
  && CHROME_VERSION="$CHROME_VERSION" /src/build.sh /opt/headless-chromium
 
 FROM node:24-trixie-slim
