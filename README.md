@@ -72,6 +72,33 @@ COPY --from=chromium /opt/headless-chromium /opt/headless-chromium
 
 The stage-1 build takes about 30 seconds: the download plus a 6-second pack.
 
+### Wolfi (Chainguard) instead of Debian
+
+Wolfi is glibc-based, so the same archive runs on it; only the package names
+differ. Two Wolfi quirks: `nss` is a meta package (the libraries are in
+`libnss` and `libnspr`), and the accessibility libraries only come inside
+`at-spi2-core`, which pulls in Python. Copy just those two from a throwaway
+stage:
+
+```dockerfile
+FROM cgr.dev/chainguard/wolfi-base AS a11y
+RUN apk add --no-cache libatk-bridge-2.0
+
+FROM cgr.dev/chainguard/wolfi-base
+RUN apk add --no-cache libstdc++ libgcc \
+      libnss libnspr glib libatk-1.0 dbus-libs libxi libxtst \
+      libx11 libxcb libxcomposite libxdamage libxext libxfixes libxrandr libxkbcommon \
+      alsa-lib expat libudev \
+      fontconfig-config font-liberation font-lohit-devanagari
+COPY --from=a11y /usr/lib/libatk-bridge-2.0.so.0 /usr/lib/libatspi.so.0 /usr/lib/
+ENV FONTCONFIG_PATH=/etc/fonts
+ENV HEADLESS_CHROMIUM_DIR=/opt/headless-chromium
+COPY --from=chromium /opt/headless-chromium /opt/headless-chromium
+```
+
+Keep stage 1 on Debian as shown above. PDFs come out pixel-identical to the
+Debian image with these fonts. Busybox `tar` unpacks the archive fine.
+
 ### Builds without internet access
 
 Some CI runners (for example self-hosted Kubernetes runners) can reach GitHub
@@ -195,7 +222,7 @@ See [SECURITY.md](SECURITY.md) to report a problem.
 ## Limitations
 
 - **Linux x86-64 only.** Google doesn't publish Chrome for Testing for Linux arm64.
-- **glibc only.** It won't run on Alpine (musl).
+- **glibc only.** It runs on Debian and Wolfi, not on Alpine (musl).
 - **Runtime disk.** About 270 MB in tmp per container, after the first render.
 - **First render.** It's slower by the unpack time, about 1 second.
 - **Single process.** It runs in `--single-process` mode: one browser per
@@ -209,7 +236,7 @@ See [SECURITY.md](SECURITY.md) to report a problem.
 | Build fails: "new shared libraries needed" | Google added a dependency | Add its Debian package to the list and to `check-needed.js` |
 | Text renders as boxes | No font covers the script | Add a `fonts-*` package (Noto for wide coverage) |
 | Arial looks different | `FONTCONFIG_PATH` not set | Set `ENV FONTCONFIG_PATH=/etc/fonts` |
-| `tar exited 2` | No `tar`, or tmp is read-only or full | Use a Debian base image; check `TMPDIR` space |
+| `tar exited 2` | No `tar`, or tmp is read-only or full | Use a Debian or Wolfi base image; check `TMPDIR` space |
 
 ## Development and CI
 
