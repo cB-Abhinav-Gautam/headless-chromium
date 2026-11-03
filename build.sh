@@ -4,6 +4,9 @@
 #
 #   ./build.sh <out-dir>                 # latest Stable from Google
 #   CHROME_VERSION=156.0.8078.80 ./build.sh <out-dir>   # pin a version
+#   ZSTD_LEVEL=19 ./build.sh <out-dir>   # smaller (~85MB) but ~2.5 min to pack
+#
+# Default zstd level 9: ~96MB, packs in ~6s, unpacks in under a second.
 #
 # Needs: bash, curl, unzip, gcc, nm (binutils), tar, node >= 23.8 (zstd).
 # Downloads straight from Google's Chrome for Testing bucket; nothing here
@@ -51,7 +54,7 @@ node -e '
   const fs = require("fs"), zlib = require("zlib"), crypto = require("crypto");
   const [tarPath, out, version] = process.argv.slice(1);
   const packed = zlib.zstdCompressSync(fs.readFileSync(tarPath), {
-    params: { [zlib.constants.ZSTD_c_compressionLevel]: 19 },
+    params: { [zlib.constants.ZSTD_c_compressionLevel]: Number(process.env.ZSTD_LEVEL || 9) },
   });
   fs.writeFileSync(out + "/chromium.tar.zst", packed);
   fs.writeFileSync(out + "/manifest.json", JSON.stringify({
