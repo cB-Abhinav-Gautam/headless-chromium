@@ -72,6 +72,37 @@ COPY --from=chromium /opt/headless-chromium /opt/headless-chromium
 
 The stage-1 build takes about 30 seconds: the download plus a 6-second pack.
 
+### Builds without internet access
+
+Some CI runners (for example self-hosted Kubernetes runners) can reach GitHub
+and Google, but the containers inside `docker build` can't. In that case,
+download on the runner and hand the files to the build as a named context:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    repository: cB-Abhinav-Gautam/headless-chromium
+    ref: <commit sha>
+    path: .headless-chromium
+- run: .headless-chromium/fetch.sh .headless-chromium   # latest Stable zip + CHROME_VERSION
+- run: docker build --build-context headless-chromium=.headless-chromium -f Dockerfile .
+```
+
+Add `.headless-chromium` to `.dockerignore` so it stays out of your app image.
+Then replace stage 1's `git fetch` with:
+
+```dockerfile
+FROM node:24-trixie-slim AS chromium
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends unzip gcc libc6-dev binutils \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=headless-chromium . /src
+RUN CHROME_VERSION="$(cat /src/CHROME_VERSION)" CHROME_ZIP=/src/chrome-headless-shell-linux64.zip \
+    /src/build.sh /opt/headless-chromium
+```
+
+`--build-context` needs BuildKit (the default builder since Docker 23).
+
 ### 2. Node
 
 ```js
@@ -100,6 +131,7 @@ Use `puppeteer-core` (no bundled browser download), not `puppeteer`.
 | Variable | Where | Meaning |
 |---|---|---|
 | `CHROME_VERSION` | build | Chrome for Testing version to package. Empty = latest Stable. |
+| `CHROME_ZIP` | build | Path to an already-downloaded zip (from `fetch.sh`); needs `CHROME_VERSION`. |
 | `ZSTD_LEVEL` | build | Compression level, default `9` (~96 MB, ~6 s). `19` gives ~85 MB but takes ~2.5 min. |
 | `HEADLESS_CHROMIUM_DIR` | runtime | Where the build output lives, conventionally `/opt/headless-chromium`. |
 | `FONTCONFIG_PATH` | runtime | Set to `/etc/fonts` so Chromium uses Debian's font configuration and aliases. |

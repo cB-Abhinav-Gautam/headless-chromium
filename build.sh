@@ -5,6 +5,9 @@
 #   ./build.sh <out-dir>                 # latest Stable from Google
 #   CHROME_VERSION=156.0.8078.80 ./build.sh <out-dir>   # pin a version
 #   ZSTD_LEVEL=19 ./build.sh <out-dir>   # smaller (~85MB) but ~2.5 min to pack
+#   CHROME_ZIP=shell.zip CHROME_VERSION=156.0.8078.80 ./build.sh <out-dir>
+#                                        # use an already-downloaded zip (for
+#                                        # builds with no internet; see README)
 #
 # Default zstd level 9: ~96MB, packs in ~6s, unpacks in under a second.
 #
@@ -18,6 +21,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+if [ -n "${CHROME_ZIP:-}" ]; then
+  : "${CHROME_VERSION:?CHROME_VERSION is required with CHROME_ZIP}"
+fi
 INDEX="https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json"
 if [ -z "${CHROME_VERSION:-}" ]; then
   CHROME_VERSION="$(curl -fsSL "$INDEX" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).channels.Stable.version))')"
@@ -25,7 +31,11 @@ fi
 URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chrome-headless-shell-linux64.zip"
 echo "headless-chromium: Chrome ${CHROME_VERSION}"
 
-curl -fsSL --retry 3 -o "$WORK/shell.zip" "$URL"
+if [ -n "${CHROME_ZIP:-}" ]; then
+  cp "$CHROME_ZIP" "$WORK/shell.zip"
+else
+  curl -fsSL --retry 3 -o "$WORK/shell.zip" "$URL"
+fi
 unzip -q "$WORK/shell.zip" -d "$WORK"
 SRC="$WORK/chrome-headless-shell-linux64"
 BIN="$SRC/chrome-headless-shell"
